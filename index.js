@@ -12,6 +12,10 @@ const PORT = 4040;
 // Use middleware to parse JSON bodies
 app.use(express.json());
 
+app.get('*', (req, res) => {
+    res.status(200).send('App is running');
+});
+
 // Define the route to handle incoming POST requests
 app.post('*', async (req, res) => {
     // Log the incoming request body to the console
