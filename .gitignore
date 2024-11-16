@@ -2,6 +2,8 @@
 node_modules/
 # Include this to ensure `node_modules` is excluded, as it is recreated with `npm install`.
 
+venv/
+
 # Logs
 logs/
 *.log
