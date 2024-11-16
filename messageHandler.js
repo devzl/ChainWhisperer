@@ -125,6 +125,58 @@ const CHAIN_IDS = {
     'base': 8453
 };
 
+// Fetch token balances from Blockscout
+async function fetchTokenBalances(walletAddress) {
+    const url = `https://eth.blockscout.com/api/v2/addresses/${walletAddress}/token-balances`;
+
+    try {
+        const response = await axios.get(url);
+        return response.data; // Return the token balance data
+    } catch (error) {
+        if (error.response && error.response.status === 404) {
+            console.warn(`No balances found for wallet ${walletAddress}.`);
+            return []; // Return an empty array for no balances
+        } else {
+            console.error(`Error fetching token balances for ${walletAddress}:`, error.message);
+            throw new Error("Unable to fetch token balances. Please try again later.");
+        }
+    }
+}
+async function handleTokenBalancesIntent(chatId) {
+    const wallet = walletConnections.get(chatId);
+    if (!wallet) {
+        return "Please create a wallet first using /start.";
+    }
+
+    const walletAddress = wallet.smartAccountAddress;
+
+    try {
+        const tokenBalances = await fetchTokenBalances(walletAddress);
+
+        if (tokenBalances.length === 0) {
+            return `No tokens found in your wallet: ${walletAddress}.`;
+        }
+
+        // Format response for the user
+        let responseText = `💰 Token balances for your wallet ${walletAddress}:\n`;
+        tokenBalances.forEach(({ token, value }) => {
+            const name = token?.name || "Unknown";
+            const symbol = token?.symbol || "Unknown";
+            const icon = token?.icon_url || "";
+            responseText += `- ${name} (${symbol}): ${value}\n`;
+            if (icon) {
+                responseText += `  Icon: ${icon}\n`; // Include icon URL if available
+            }
+        });
+
+        return responseText;
+
+    } catch (error) {
+        return `❌ Error: ${error.message}`;
+    }
+}
+
+
 // Initialize Biconomy wallet
 async function createSmartAccount(chatId) {
    try {
@@ -611,6 +663,10 @@ async function handleMessage(message) {
                 case 'balance':
                     responseText = await handleBalanceIntent(chatId);
                     break;
+                case 'token_balances':
+                    responseText = await handleTokenBalancesIntent(chatId);
+                    break;
+    
                 default:
                     responseText = aiResponse.response;
             }

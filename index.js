@@ -12,9 +12,9 @@ const PORT = 4040;
 // Use middleware to parse JSON bodies
 app.use(express.json());
 
-app.get('*', (req, res) => {
-    res.status(200).send('App is running');
-});
+// app.get('*', (req, res) => {
+//     res.status(200).send('App is running');
+// });
 
 // Define the route to handle incoming POST requests
 app.post('*', async (req, res) => {
@@ -29,8 +29,8 @@ app.post('*', async (req, res) => {
             await handleMessage(message);
             res.status(200).send('Message handled');
         } else {
-            // If no message is found in the request body
-            res.status(400).send('No message found in request');
+            // Ignore edited messages or if no message found
+            res.status(200).send('All good');
         }
     } catch (error) {
         console.error('Error handling message:', error);

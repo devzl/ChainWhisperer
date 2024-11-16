@@ -95,13 +95,18 @@ def analyze_message():
         return jsonify({'error': str(e)}), 500
 
 def detect_intent(message):
+    """
+    Determine the user's intent from the message.
+    """
     message = message.lower()
-    if any(word in message for word in ['balance', 'how much', 'check']):
-        return 'balance'
+    if any(phrase in message for phrase in ['my token balances', 'which tokens', 'show tokens', 'token balance']):
+        return 'token_balances'
     elif any(word in message for word in ['swap', 'exchange', 'trade']):
         return 'swap'
     elif any(word in message for word in ['bridge', 'transfer', 'send']):
         return 'bridge'
+    elif any(word in message for word in ['balance', 'how much', 'check']):
+        return 'balance'
     return 'unknown'
 
 def extract_parameters(message):

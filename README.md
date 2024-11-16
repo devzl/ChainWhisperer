@@ -14,6 +14,13 @@ OPENAI_API_KEY=
 INFURA_KEY=
 ```
 
+After `/start` you will have a wallet address.
+
 Example cross-chain swap:
 
 `Swap 100 USDC to WETH from Ethereum to Polygon`
+
+Also:
+
+"What are my token balances?"
+"Which tokens do I have in my wallet?"
