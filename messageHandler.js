@@ -8,9 +8,7 @@ const crypto = require('crypto');
 const { SDK, NetworkEnum, getRandomBytes32, HashLock, PrivateKeyProviderConnector } = require("@1inch/cross-chain-sdk");
 const Web3 = require('web3');
 const { ethers } = require('ethers');
-
-// Store wallet connections (should go in a secure db)
-const walletConnections = new Map();
+const db = require('./db'); // Import database helper
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
@@ -143,7 +141,7 @@ async function fetchTokenBalances(walletAddress) {
     }
 }
 async function handleTokenBalancesIntent(chatId) {
-    const wallet = walletConnections.get(chatId);
+    const wallet = await getWallet(chatId);
     if (!wallet) {
         return "Please create a wallet first using /start.";
     }
@@ -177,38 +175,50 @@ async function handleTokenBalancesIntent(chatId) {
 }
 
 
+async function getWallet(chatId) {
+    try {
+        const result = await db.query(`SELECT * FROM wallets WHERE chat_id = $1`, [chatId]);
+        return result.rows[0] || null;
+    } catch (error) {
+        console.error('Error fetching wallet from database:', error);
+        throw error;
+    }
+}
+
+
 // Initialize Biconomy wallet
 async function createSmartAccount(chatId) {
-   try {
-       // Generate new private key for this user
-       const privateKey = generatePrivateKey();
-       console.log(`Generated new wallet for user ${chatId}`);
+    try {
+        const privateKey = generatePrivateKey();
+        const account = privateKeyToAccount(`0x${privateKey}`);
+        
+        const bundlerUrl = "https://bundler.biconomy.io/api/v3/84532/nJPK7B3ru.dd7f7861-190d-41bd-af80-6877f74b8f44";
 
-       const account = privateKeyToAccount(`0x${privateKey}`);
-       
-       const bundlerUrl = "https://bundler.biconomy.io/api/v3/84532/nJPK7B3ru.dd7f7861-190d-41bd-af80-6877f74b8f44";
+        const nexusClient = await createNexusClient({
+            signer: account,
+            chain: baseSepolia,
+            transport: http(),
+            bundlerTransport: http(bundlerUrl),
+        });
 
-       const nexusClient = await createNexusClient({
-           signer: account,
-           chain: baseSepolia,
-           transport: http(),
-           bundlerTransport: http(bundlerUrl),
-       });
+        const smartAccountAddress = await nexusClient.account.address;
 
-       const smartAccountAddress = await nexusClient.account.address;
+        // Save wallet to database
+        const result = await db.query(
+            `INSERT INTO wallets (chat_id, smart_account_address, private_key, chain_id) 
+             VALUES ($1, $2, $3, $4) 
+             ON CONFLICT (chat_id) 
+             DO UPDATE SET smart_account_address = $2, private_key = $3, chain_id = $4
+             RETURNING *`,
+            [chatId, smartAccountAddress, privateKey, baseSepolia.id]
+        );
 
-       walletConnections.set(chatId, {
-           smartAccountAddress,
-           nexusClient,
-           privateKey // TODO: Store this securely in production
-       });
-
-       console.log(`Smart account created: ${smartAccountAddress}`);
-       return smartAccountAddress;
-   } catch (error) {
-       console.error('Error creating smart account:', error);
-       throw error;
-   }
+        console.log('Wallet saved to database:', result.rows[0]);
+        return smartAccountAddress;
+    } catch (error) {
+        console.error('Error creating smart account:', error);
+        throw error;
+    }
 }
 
 // Function to interact with Python AI service
@@ -392,7 +402,7 @@ async function sendCrossChainMessage(fromChainId, toChainId, message, wallet) {
 }
 
 async function handleSwapIntent(aiResponse, chatId) {
-    const wallet = walletConnections.get(chatId);
+    const wallet = await getWallet(chatId);
     if (!wallet) {
         return "You'll need a wallet first! Use /start to create one.";
     }
@@ -529,7 +539,7 @@ async function get1inchQuote(fromToken, toToken, amount, chainId = 1) {
 
 
 async function handleBridgeIntent(aiResponse, chatId) {
-    const wallet = walletConnections.get(chatId);
+    const wallet = await getWallet(chatId);
     if (!wallet) {
         return "You'll need a wallet first! Use /start to create one.";
     }
@@ -590,7 +600,8 @@ function getChainName(chainId) {
 
 
 async function handleBalanceIntent(chatId) {
-   const wallet = walletConnections.get(chatId);
+    const wallet = await getWallet(chatId);
+
    if (!wallet) {
        return "Please use /start to create a wallet first!";
    }
@@ -614,7 +625,7 @@ async function handleMessage(message) {
 
     try {
         if (text === '/start') {
-            const wallet = walletConnections.get(chatId);
+            const wallet = await getWallet(chatId);
             if (!wallet) {
                 const smartAccountAddress = await createSmartAccount(chatId);
                 responseText = `✅ New wallet created successfully!\n\n` +
@@ -635,7 +646,7 @@ async function handleMessage(message) {
             }
         } 
         else if (text.toLowerCase() === 'confirm') {
-            const wallet = walletConnections.get(chatId);
+            const wallet = await getWallet(chatId);
             if (!wallet) {
                 responseText = "Please create a wallet first using /start";
             } 

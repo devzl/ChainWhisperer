@@ -12,6 +12,12 @@ CDP_API_KEY_PRIVATE_KEY=
 OPENAI_API_KEY=
 
 INFURA_KEY=
+
+PG_USER=your_user
+PG_PASSWORD=your_password
+PG_HOST=localhost
+PG_DATABASE=crypto_wallets
+PG_PORT=5432
 ```
 
 After `/start` you will have a wallet address.
