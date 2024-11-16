@@ -170,7 +170,7 @@ async function analyzeWithAI(message, chatId) {
 
     try {
         // Fixed URL to match the Python server port (5050)
-        const response = await axios.post('http://localhost:5050/analyze', {
+        const response = await axios.post(process.env.AI_SERVICE_URL, {
             message: message.text || message, // Handle both message object and direct text
             chatId: chatId.toString() // Convert to string just in case
         }, {
@@ -209,9 +209,17 @@ async function handleSwapConfirmation(wallet, chatId) {
             return "No pending swap to confirm.";
         }
 
+        // Use recommended preset
+        const preset = quote.presets?.[quote.recommendedPreset];
+        if (!preset) {
+            return "❌ Unable to execute swap: Preset information is missing.";
+        }
+
         // Generate secrets for hash lock
-        const secretsCount = quote.preset.secretsCount;
-        const secrets = Array.from({ length: secretsCount }).map(() => getRandomBytes32());
+        const secretsCount = preset.secretsCount || 1; // Default to 1 if not defined
+        const secrets = Array.from({ length: secretsCount }).map(() =>
+            '0x' + crypto.randomBytes(32).toString('hex')
+        );
         const secretHashes = secrets.map((x) => HashLock.hashSecret(x));
 
         const hashLock =
@@ -228,10 +236,6 @@ async function handleSwapConfirmation(wallet, chatId) {
             walletAddress: wallet.smartAccountAddress,
             hashLock,
             secretHashes,
-            // fee: {
-            //     takingFeeBps: 100, // Example: 1% fee
-            //     takingFeeReceiver: "0x0000000000000000000000000000000000000000"
-            // }
         });
 
         // Clear pending quote
@@ -245,6 +249,7 @@ async function handleSwapConfirmation(wallet, chatId) {
         return "❌ Failed to execute Fusion+ swap. Please try again.";
     }
 }
+
 
 
 async function handleBridgeConfirmation(wallet, chatId) {
@@ -395,6 +400,7 @@ async function handleSwapIntent(aiResponse, chatId) {
             srcTokenAddress,
             dstTokenAddress,
             amount: amountInWei,
+            enableEstimate: true, // Ensure this is set
         };
 
         // Get cross-chain quote using SDK

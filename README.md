@@ -10,4 +10,10 @@ LAYERZERO_API_KEY=your_layerzero_api_key
 CDP_API_KEY_NAME=
 CDP_API_KEY_PRIVATE_KEY=
 OPENAI_API_KEY=
+
+INFURA_KEY=
 ```
+
+Example cross-chain swap:
+
+`Swap 100 USDC to WETH from Ethereum to Polygon`
