@@ -120,8 +120,54 @@ const CHAIN_IDS = {
     'polygon': 137,
     'arbitrum': 42161,
     'optimism': 10,
-    'base': 8453
+    'sepolia': 11155111, // Ethereum Sepolia testnet
+    'goerli': 5,         // Ethereum Goerli testnet
+    'mumbai': 80001,     // Polygon Mumbai testnet
+    'flare': 14,         // Flare mainnet
+    'coston': 16,        // Flare Coston testnet
 };
+
+async function handleSendIntent(aiResponse, chatId) {
+    const wallet = await getWallet(chatId);
+    if (!wallet) {
+        return "You'll need a wallet first! Use /start to create one.";
+    }
+
+    const params = aiResponse.parameters;
+
+    if (!params.amount || !params.fromToken || !params.toAddress || !params.toChain) {
+        return "Please specify the amount, token, recipient address, and network. Example: 'Send 1.5 USDC to 0x123... on Polygon'.";
+    }
+
+    // Resolve chain ID
+    const chainId = CHAIN_IDS[params.toChain.toLowerCase()];
+    if (!chainId) {
+        return `Unsupported network: ${params.toChain}. Supported networks include Ethereum, Polygon, Arbitrum, Optimism, Flare, and testnets.`;
+    }
+
+    // Resolve token address
+    const tokenAddress = TOKEN_ADDRESSES[params.fromToken.toUpperCase()]?.[chainId];
+    if (!tokenAddress) {
+        return `Unsupported token or chain. Please check the token (${params.fromToken}) and chain (${params.toChain}).`;
+    }
+
+    try {
+        // Fetch wallet balance for the specified chain
+        const balances = await fetchTokenBalancesDirect(wallet.smart_account_address, chainId);
+        const tokenBalance = balances.find(b => b.symbol === params.fromToken);
+
+        if (!tokenBalance || parseFloat(tokenBalance.balance) < parseFloat(params.amount)) {
+            return `❌ Insufficient ${params.fromToken} balance on ${params.toChain}. Available: ${tokenBalance?.balance || 0}.`;
+        }
+
+        return `✅ Please send ${params.amount} ${params.fromToken} to ${params.toAddress} on ${params.toChain}.`;
+    } catch (error) {
+        console.error('Error in handleSendIntent:', error);
+        return `❌ Unable to process your request. Please try again later.`;
+    }
+}
+
+
 
 // Fetch token balances from Blockscout
 async function fetchTokenBalances(walletAddress) {
@@ -140,23 +186,119 @@ async function fetchTokenBalances(walletAddress) {
         }
     }
 }
+
+// Done with BlockScout
+async function handleTokenBalancesIntent(chatId, chainName = 'ethereum') {
+    const wallet = await getWallet(chatId);
+    if (!wallet) {
+        return "Please create a wallet first using /start.";
+    }
+
+    const walletAddress = wallet.smart_account_address;
+
+    // Map chain name to ID
+    const chainId = CHAIN_IDS[chainName.toLowerCase()];
+    if (!chainId) {
+        return `Unsupported network: ${chainName}. Supported networks include Ethereum, Polygon, Arbitrum, Optimism, Flare, and various testnets.`;
+    }
+
+    try {
+        const tokenBalances = await fetchTokenBalances(walletAddress, chainId);
+
+        if (tokenBalances.length === 0) {
+            return `No tokens found in your wallet on ${chainName}.`;
+        }
+
+        // Format response for the user
+        let responseText = `💰 Token balances for your wallet ${walletAddress} on ${chainName}:\n`;
+        tokenBalances.forEach(({ name, symbol, balance }) => {
+            responseText += `- ${name} (${symbol}): ${balance}\n`;
+        });
+
+        return responseText;
+    } catch (error) {
+        return `❌ Error: ${error.message}`;
+    }
+}
+
+
+async function fetchTokenBalancesDirect(walletAddress, chainId = 1) {
+    try {
+        // Initialize provider based on chainId
+        const providerUrls = {
+            1: `https://mainnet.infura.io/v3/${process.env.INFURA_KEY}`, // Ethereum Mainnet
+            137: `https://polygon-mainnet.infura.io/v3/${process.env.INFURA_KEY}`, // Polygon Mainnet
+            42161: `https://arbitrum-mainnet.infura.io/v3/${process.env.INFURA_KEY}`, // Arbitrum
+            10: `https://optimism-mainnet.infura.io/v3/${process.env.INFURA_KEY}`, // Optimism
+            11155111: `https://sepolia.infura.io/v3/${process.env.INFURA_KEY}`, // Sepolia Testnet
+            5: `https://goerli.infura.io/v3/${process.env.INFURA_KEY}`, // Goerli Testnet
+            14: `https://flare-api.flare.network/ext/bc/C/rpc`, // Flare Mainnet
+            16: `https://coston.flare.network/ext/bc/C/rpc`, // Flare Testnet
+        };
+
+        const providerUrl = providerUrls[chainId];
+        if (!providerUrl) {
+            throw new Error(`Unsupported chainId: ${chainId}`);
+        }
+
+        const provider = new ethers.JsonRpcProvider(providerUrl);
+
+        // Fetch native token balance (e.g., ETH, MATIC)
+        const nativeBalance = await provider.getBalance(walletAddress);
+
+        const tokenBalances = [];
+        tokenBalances.push({
+            name: "Native Token",
+            symbol: chainId === 137 ? "MATIC" : "ETH", // Adjust for the chain
+            balance: ethers.formatEther(nativeBalance),
+        });
+
+        // Add ERC-20 token balances
+        const tokens = TOKEN_ADDRESSES; // Your predefined tokens
+        for (const [tokenSymbol, chainTokens] of Object.entries(tokens)) {
+            const tokenAddress = chainTokens[chainId];
+            if (!tokenAddress) continue;
+
+            const erc20 = new ethers.Contract(
+                tokenAddress,
+                ["function balanceOf(address owner) view returns (uint256)"],
+                provider
+            );
+            const balance = await erc20.balanceOf(walletAddress);
+
+            tokenBalances.push({
+                name: tokenSymbol,
+                symbol: tokenSymbol,
+                balance: ethers.formatUnits(balance, TOKEN_DECIMALS[tokenSymbol]),
+            });
+        }
+
+        return tokenBalances;
+    } catch (error) {
+        console.error(`Error fetching token balances: ${error.message}`);
+        throw new Error("Unable to fetch token balances. Please try again later.");
+    }
+}
+
+
+
 async function handleTokenBalancesIntent(chatId) {
     const wallet = await getWallet(chatId);
     if (!wallet) {
         return "Please create a wallet first using /start.";
     }
 
-    const walletAddress = wallet.smartAccountAddress;
+    const walletAddress = wallet.smart_account_address;
 
     try {
         const tokenBalances = await fetchTokenBalances(walletAddress);
 
         if (tokenBalances.length === 0) {
-            return `No tokens found in your wallet: ${walletAddress}.`;
+            return `No tokens found in your wallet on Mainnet: ${walletAddress}.`;
         }
 
         // Format response for the user
-        let responseText = `💰 Token balances for your wallet ${walletAddress}:\n`;
+        let responseText = `💰 Token balances for your wallet ${walletAddress} on Mainnet:\n`;
         tokenBalances.forEach(({ token, value }) => {
             const name = token?.name || "Unknown";
             const symbol = token?.symbol || "Unknown";
@@ -178,12 +320,14 @@ async function handleTokenBalancesIntent(chatId) {
 async function getWallet(chatId) {
     try {
         const result = await db.query(`SELECT * FROM wallets WHERE chat_id = $1`, [chatId]);
+        console.log('Fetched wallet from database:', result.rows[0]);
         return result.rows[0] || null;
     } catch (error) {
         console.error('Error fetching wallet from database:', error);
         throw error;
     }
 }
+
 
 
 // Initialize Biconomy wallet
@@ -293,7 +437,7 @@ async function handleSwapConfirmation(wallet, chatId) {
 
         // Place order using SDK
         const order = await sdk.placeOrder(quote, {
-            walletAddress: wallet.smartAccountAddress,
+            walletAddress: wallet.smart_account_address,
             hashLock,
             secretHashes,
         });
@@ -326,7 +470,7 @@ async function handleBridgeConfirmation(wallet, chatId) {
             fromTokenAddress: bridge.fromToken,
             toTokenAddress: bridge.toToken,
             amount: bridge.amount,
-            fromAddress: wallet.smartAccountAddress
+            fromAddress: wallet.smart_account_address
         }, {
             headers: { 'Authorization': `Bearer ${INCH_API_KEY}` }
         });
@@ -607,7 +751,7 @@ async function handleBalanceIntent(chatId) {
    }
    try {
        const balance = await wallet.nexusClient.getBalance({
-           address: wallet.smartAccountAddress
+           address: wallet.smart_account_address
        });
        return `💰 Your balance: ${balance} ETH`;
    } catch (error) {
@@ -632,16 +776,15 @@ async function handleMessage(message) {
                              `Your address: ${smartAccountAddress}\n\n` +
                              `⚠️ Important: This is a test wallet. Do not send significant funds.\n\n` +
                              `You can:\n` +
-                             `• Check balance: "What's my balance?"\n` +
-                             `• Swap tokens: "Swap 100 USDC to ETH"\n` +
+                             `• Check balance: "What's my token balance?"\n` +
+                             `• Swap tokens: "Swap 100 USDC to WETH from Ethereum to Polygon "\n` +
                              `• Bridge assets: "Bridge 0.1 ETH to Polygon"\n` +
                              `• Get quotes: "Price check for 1000 USDT to ETH"`;
             } else {
-                responseText = `You already have a wallet: ${wallet.smartAccountAddress}\n\n` +
+                responseText = `You already have a wallet: ${wallet.smart_account_address}\n\n` +
                              `What would you like to do?\n` +
-                             `• Check balance\n` +
-                             `• Swap tokens\n` +
-                             `• Bridge assets\n` +
+                             `• Check token balances\n` +
+                             `• Swap and Bridge tokens between chain\n` +
                              `• Get price quotes`;
             }
         } 
@@ -676,6 +819,9 @@ async function handleMessage(message) {
                     break;
                 case 'token_balances':
                     responseText = await handleTokenBalancesIntent(chatId);
+                    break;
+                case 'send':
+                    responseText = await handleSendIntent(aiResponse, chatId)
                     break;
     
                 default:
