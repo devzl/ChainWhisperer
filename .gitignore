@@ -2,7 +2,49 @@
 node_modules/
 # Include this to ensure `node_modules` is excluded, as it is recreated with `npm install`.
 
+# Byte-compiled files
+*.pyc
+*.pyo
+__pycache__/
+
+# Virtual environments
 venv/
+env/
+
+# Cache files
+*.cache
+*.log
+
+# Environment variables
+.env
+
+# IDE or editor specific files
+.vscode/
+.idea/
+
+# Flask-specific files
+instance/
+*.db
+
+# Pytest cache
+.pytest_cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+*.cover
+coverage.xml
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
 
 # Logs
 logs/
