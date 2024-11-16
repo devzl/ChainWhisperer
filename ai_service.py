@@ -102,31 +102,65 @@ def detect_intent(message):
 def extract_parameters(message):
     """
     Extract parameters for intents like "send", "swap", or "bridge".
+    Handles various message patterns like:
+    - "Swap 100 USDC to WETH from Ethereum to Polygon"
+    - "Bridge 0.1 ETH to Polygon"
+    - "Send 1.5 USDC to 0x123... on Polygon"
     """
     words = message.lower().split()
     params = {
         'amount': None,
-        'fromToken': None,  # Token being sent
-        'toAddress': None,  # Recipient address for "send"
-        'toChain': None,    # Network for "send" intent
+        'fromToken': None,
+        'toToken': None,
+        'fromChain': None,
+        'toChain': None,
+        'toAddress': None,
     }
 
     try:
-        # Find amount and token
+        # First pass: find amount and initial token
         for i, word in enumerate(words):
             # Detect numeric values (amount)
             if word.replace('.', '', 1).isdigit():
                 params['amount'] = float(word)
                 if i + 1 < len(words):
                     params['fromToken'] = words[i + 1].upper()
+                break
 
-            # Extract recipient address
-            if word.startswith('0x') and len(word) == 42:  # Likely an Ethereum address
+        # Second pass: find Ethereum address if present
+        for i, word in enumerate(words):
+            if word.startswith('0x') and len(word) >= 40:
                 params['toAddress'] = word
+                
+                # Look for chain after address (usually preceded by "on" or "to")
+                if i + 2 < len(words) and words[i + 1] in ['on', 'to']:
+                    params['toChain'] = words[i + 2].capitalize()
+                break
 
-            # Look for "on" to extract the chain/network
-            if word == 'on' and i + 1 < len(words):
-                params['toChain'] = words[i + 1].capitalize()
+        # Third pass: handle token and chain patterns
+        for i, word in enumerate(words):
+            # Pattern: "to [TOKEN] from [CHAIN] to [CHAIN]"
+            if word == 'to' and i + 1 < len(words):
+                next_word = words[i + 1].upper()
+                # Check if next word is a known token (you should have a token list)
+                if next_word in ['ETH', 'WETH', 'USDC', 'USDT', 'DAI', 'WBTC', 'MATIC', 'LINK', 'UNI']:
+                    params['toToken'] = next_word
+                # Check if next word is a chain name
+                elif next_word.upper() in ['ETHEREUM', 'POLYGON', 'ARBITRUM', 'OPTIMISM', 'BASE']:
+                    params['toChain'] = words[i + 1].capitalize()
+
+            # Look for source chain after "from"
+            if word == 'from' and i + 1 < len(words):
+                params['fromChain'] = words[i + 1].capitalize()
+
+        # If we have toChain but no fromChain, assume Ethereum
+        if params['toChain'] and not params['fromChain']:
+            params['fromChain'] = 'Ethereum'
+
+        # For bridge operations, if no toToken is specified, use the fromToken
+        if not params['toToken'] and params['fromToken'] and 'bridge' in message.lower():
+            params['toToken'] = params['fromToken']
+
     except Exception as e:
         print(f"Error extracting parameters: {str(e)}")
 

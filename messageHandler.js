@@ -2,7 +2,7 @@ const axios = require('axios');
 require('dotenv').config();
 const { privateKeyToAccount } = require("viem/accounts");
 const { createNexusClient } = require("@biconomy/sdk");
-const { baseSepolia } = require("viem/chains");
+const { polygon } = require("viem/chains");
 const { http } = require("viem");
 const crypto = require('crypto');
 const { SDK, NetworkEnum, getRandomBytes32, HashLock, PrivateKeyProviderConnector } = require("@1inch/cross-chain-sdk");
@@ -25,7 +25,7 @@ const sdk = new SDK({
   
 
 const toChecksumAddress = (address) => {
-    return ethers.utils.getAddress(address);
+    return ethers.getAddress(address);
 };
 
 // const LZ_API_KEY = process.env.LAYERZERO_API_KEY;
@@ -78,24 +78,20 @@ const TOKEN_ADDRESSES = {
         137: '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6', // WBTC on Polygon
         42161: '0x2f2a2543B76a4166549F7Aaab0cF3eFba4fc85d2', // WBTC on Arbitrum
         10: '0x68f180fcce6836688e9084f035309e29bf0a2095', // WBTC on Optimism
-        8453: '0x', // WBTC on Base (verify if available)
     },
     'MATIC': {
         137: '0x0000000000000000000000000000000000001010', // MATIC on Polygon (special address)
     },
     'LINK': {
         1: '0x514910771AF9Ca656af840dff83E8264EcF986CA', // LINK on Ethereum
-        137: '0x53E0bca35ec356bd5dddfebbd1fc0fd03fabad39', // LINK on Polygon
         42161: '0xf97f4df75117a78c1A5a0DBb814Af92458539FB4', // LINK on Arbitrum
         10: '0x350a791bfc2c21f9ed5d10980dad2e2638ffa7f6', // LINK on Optimism
-        8453: '0x', // LINK on Base (verify if available)
     },
     'UNI': {
         1: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', // UNI on Ethereum
         137: '0xb33EaAd8d922B1083446DC23f610c2567fB5180f', // UNI on Polygon
         42161: '0xfa7f8980b0f1e64a2062791cc3b0871572f1f7f0', // UNI on Arbitrum
         10: '0x6fd9d7AD17242c41f7131d257212c54A0e816691', // UNI on Optimism
-        8453: '0x', // UNI on Base (verify if available)
     },
     // Add more tokens as needed
 };
@@ -171,7 +167,7 @@ async function handleSendIntent(aiResponse, chatId) {
 
 // Fetch token balances from Blockscout
 async function fetchTokenBalances(walletAddress) {
-    const url = `https://eth.blockscout.com/api/v2/addresses/${walletAddress}/token-balances`;
+    const url = `https://matic.blockscout.com/api/v2/addresses/${walletAddress}/token-balances`;
 
     try {
         const response = await axios.get(url);
@@ -188,7 +184,7 @@ async function fetchTokenBalances(walletAddress) {
 }
 
 // Done with BlockScout
-async function handleTokenBalancesIntent(chatId, chainName = 'ethereum') {
+async function handleTokenBalancesIntent(chatId, chainName = 'polygon') {
     const wallet = await getWallet(chatId);
     if (!wallet) {
         return "Please create a wallet first using /start.";
@@ -242,9 +238,9 @@ async function fetchTokenBalancesDirect(walletAddress, chainId = 1) {
         }
 
         const provider = new ethers.JsonRpcProvider(providerUrl);
-
+        console.log("walletAddress: ", walletAddress, toChecksumAddress(walletAddress));
         // Fetch native token balance (e.g., ETH, MATIC)
-        const nativeBalance = await provider.getBalance(walletAddress);
+        const nativeBalance = await provider.getBalance(toChecksumAddress(walletAddress));
 
         const tokenBalances = [];
         tokenBalances.push({
@@ -253,18 +249,24 @@ async function fetchTokenBalancesDirect(walletAddress, chainId = 1) {
             balance: ethers.formatEther(nativeBalance),
         });
 
+        
         // Add ERC-20 token balances
         const tokens = TOKEN_ADDRESSES; // Your predefined tokens
         for (const [tokenSymbol, chainTokens] of Object.entries(tokens)) {
             const tokenAddress = chainTokens[chainId];
             if (!tokenAddress) continue;
 
+            console.log("tokenAddress: ", tokenAddress, toChecksumAddress(tokenAddress));
+
             const erc20 = new ethers.Contract(
-                tokenAddress,
+                toChecksumAddress(tokenAddress),
                 ["function balanceOf(address owner) view returns (uint256)"],
                 provider
             );
-            const balance = await erc20.balanceOf(walletAddress);
+
+            console.log("walletAddress: ", walletAddress, toChecksumAddress(walletAddress));
+
+            const balance = await erc20.balanceOf(toChecksumAddress(walletAddress));
 
             tokenBalances.push({
                 name: tokenSymbol,
@@ -282,39 +284,39 @@ async function fetchTokenBalancesDirect(walletAddress, chainId = 1) {
 
 
 
-async function handleTokenBalancesIntent(chatId) {
-    const wallet = await getWallet(chatId);
-    if (!wallet) {
-        return "Please create a wallet first using /start.";
-    }
+// async function handleTokenBalancesIntent(chatId) {
+//     const wallet = await getWallet(chatId);
+//     if (!wallet) {
+//         return "Please create a wallet first using /start.";
+//     }
 
-    const walletAddress = wallet.smart_account_address;
+//     const walletAddress = wallet.smart_account_address;
 
-    try {
-        const tokenBalances = await fetchTokenBalances(walletAddress);
+//     try {
+//         const tokenBalances = await fetchTokenBalances(walletAddress);
 
-        if (tokenBalances.length === 0) {
-            return `No tokens found in your wallet on Mainnet: ${walletAddress}.`;
-        }
+//         if (tokenBalances.length === 0) {
+//             return `No tokens found in your wallet on Mainnet: ${walletAddress}.`;
+//         }
 
-        // Format response for the user
-        let responseText = `💰 Token balances for your wallet ${walletAddress} on Mainnet:\n`;
-        tokenBalances.forEach(({ token, value }) => {
-            const name = token?.name || "Unknown";
-            const symbol = token?.symbol || "Unknown";
-            const icon = token?.icon_url || "";
-            responseText += `- ${name} (${symbol}): ${value}\n`;
-            if (icon) {
-                responseText += `  Icon: ${icon}\n`; // Include icon URL if available
-            }
-        });
+//         // Format response for the user
+//         let responseText = `💰 Token balances for your wallet ${walletAddress} on Mainnet:\n`;
+//         tokenBalances.forEach(({ token, value }) => {
+//             const name = token?.name || "Unknown";
+//             const symbol = token?.symbol || "Unknown";
+//             const icon = token?.icon_url || "";
+//             responseText += `- ${name} (${symbol}): ${value}\n`;
+//             if (icon) {
+//                 responseText += `  Icon: ${icon}\n`; // Include icon URL if available
+//             }
+//         });
 
-        return responseText;
+//         return responseText;
 
-    } catch (error) {
-        return `❌ Error: ${error.message}`;
-    }
-}
+//     } catch (error) {
+//         return `❌ Error: ${error.message}`;
+//     }
+// }
 
 
 async function getWallet(chatId) {
@@ -340,7 +342,7 @@ async function createSmartAccount(chatId) {
 
         const nexusClient = await createNexusClient({
             signer: account,
-            chain: baseSepolia,
+            chain: polygon,
             transport: http(),
             bundlerTransport: http(bundlerUrl),
         });
@@ -354,7 +356,7 @@ async function createSmartAccount(chatId) {
              ON CONFLICT (chat_id) 
              DO UPDATE SET smart_account_address = $2, private_key = $3, chain_id = $4
              RETURNING *`,
-            [chatId, smartAccountAddress, privateKey, baseSepolia.id]
+            [chatId, smartAccountAddress, privateKey, polygon.id]
         );
 
         console.log('Wallet saved to database:', result.rows[0]);
@@ -554,68 +556,42 @@ async function handleSwapIntent(aiResponse, chatId) {
     try {
         const params = aiResponse.parameters;
 
-        // Ensure all required parameters are provided
         if (!params.amount || !params.fromToken || !params.toToken || !params.fromChain || !params.toChain) {
-            return "Please specify the amount, tokens, and both source and target chains. For example: 'Swap 100 USDC to ETH from Ethereum to Gnosis'";
+            return "Please specify the amount, tokens, and both source and target chains. Example: 'Swap 100 USDC to WETH from Ethereum to Polygon'.";
         }
 
-        // Resolve chain IDs
-        const srcChainId = getChainId(params.fromChain);
-        const dstChainId = getChainId(params.toChain);
-
-        // Check if source and destination chains are the same
-        if (srcChainId === dstChainId) {
-            console.log('dstChainId: ', dstChainId);
-            console.log('srcChainId: ', srcChainId);
-            return `❌ Source chain (${params.fromChain}) and destination chain (${params.toChain}) cannot be the same for a cross-chain swap.`;
+        if (params.fromChain.toLowerCase() === params.toChain.toLowerCase()) {
+            return `Source chain (${params.fromChain}) and destination chain (${params.toChain}) cannot be the same.`;
         }
 
-        // Resolve token addresses
+        const srcChainId = CHAIN_IDS[params.fromChain.toLowerCase()];
+        const dstChainId = CHAIN_IDS[params.toChain.toLowerCase()];
+
+        if (!srcChainId || !dstChainId) {
+            return `Unsupported chain. Ensure source chain (${params.fromChain}) and destination chain (${params.toChain}) are valid.`;
+        }
+
         const srcTokenAddress = TOKEN_ADDRESSES[params.fromToken.toUpperCase()]?.[srcChainId];
         const dstTokenAddress = TOKEN_ADDRESSES[params.toToken.toUpperCase()]?.[dstChainId];
 
-        // Validate token addresses
         if (!srcTokenAddress || !dstTokenAddress) {
             return `Unsupported token or chain. Please check the token (${params.fromToken}, ${params.toToken}) and chain (${params.fromChain}, ${params.toChain}).`;
         }
 
-        // Convert amount to proper decimals
         const decimals = TOKEN_DECIMALS[params.fromToken.toUpperCase()];
-
-        console.log("Debug Parameters:", {
-            srcChainId,
-            dstChainId,
-            srcTokenAddress,
-            dstTokenAddress,
-            decimals,
-            amount : params.amount
-        });
-
         const amountInWei = BigInt(Math.floor(params.amount * (10 ** decimals))).toString();
 
-
-        
-
-        
-        // Prepare quote parameters
-        const quoteParams = {
+        const quote = await sdk.getQuote({
             srcChainId,
             dstChainId,
             srcTokenAddress,
             dstTokenAddress,
             amount: amountInWei,
-            enableEstimate: true, // Ensure this is set
-        };
+        });
 
-        // Get cross-chain quote using SDK
-        const quote = await sdk.getQuote(quoteParams);
-        console.log('quote: ', quote);
-
-        // Convert received amount to human-readable format
         const toDecimals = TOKEN_DECIMALS[params.toToken.toUpperCase()];
         const humanReadableToAmount = Number(BigInt(quote.dstTokenAmount) / BigInt(10 ** toDecimals));
 
-        // Store the quote for confirmation
         wallet.pendingQuote = {
             quote,
             params,
@@ -627,10 +603,11 @@ async function handleSwapIntent(aiResponse, chatId) {
                `You'll receive: ${humanReadableToAmount.toFixed(6)} ${params.toToken} on ${params.toChain}\n\n` +
                `Reply with 'confirm' to execute the cross-chain swap.`;
     } catch (error) {
-        console.error('Error in cross-chain swap intent:', error);
-        return `❌ Sorry, I couldn't get a cross-chain quote: ${error.message}`;
+        console.error('Error in swap intent:', error);
+        return `❌ Unable to get a cross-chain quote: ${error.message}`;
     }
 }
+
 
 
 
