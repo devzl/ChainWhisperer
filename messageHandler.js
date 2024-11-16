@@ -32,8 +32,6 @@ const toChecksumAddress = (address) => {
 
 // const LZ_API_KEY = process.env.LAYERZERO_API_KEY;
 
-// const AI_SERVICE_URL = 'http://localhost:5000/analyze';
-
 // Generate new private key for user
 function generatePrivateKey() {
    return crypto.randomBytes(32).toString('hex');
