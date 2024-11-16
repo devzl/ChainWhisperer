@@ -41,12 +41,6 @@ agent_executor = create_react_agent(
 
 @app.route('/analyze', methods=['POST', 'OPTIONS'])
 def analyze_message():
-    # Debug logging
-    print("Received request")
-    print("Method:", request.method)
-    print("Headers:", dict(request.headers))
-    print("Data:", request.get_data(as_text=True))
-
     if request.method == 'OPTIONS':
         response = jsonify({'status': 'ok'})
         response.headers.add('Access-Control-Allow-Origin', '*')
@@ -55,7 +49,6 @@ def analyze_message():
         return response
 
     try:
-        # Get and validate data
         data = request.get_json(force=True)
         print("Parsed JSON data:", data)
 
@@ -70,12 +63,28 @@ def analyze_message():
 
         print(f"Processing message: '{message}' for chat_id: {chat_id}")
 
-        # For now, return a simple response
-        # Later we'll integrate the AI components
+        # Get intent and parameters
+        intent = detect_intent(message)
+        params = extract_parameters(message)
+
+        # Create appropriate response based on intent and parameters
+        if intent == 'swap':
+            if params['amount'] and params['fromToken'] and params['toToken']:
+                response_text = f"Processing swap of {params['amount']} {params['fromToken']} to {params['toToken']}"
+            else:
+                response_text = "Please specify the amount and tokens. For example: 'Swap 100 USDC to ETH'"
+        elif intent == 'bridge':
+            if params['amount'] and params['fromToken'] and params['toChain']:
+                response_text = f"Processing bridge of {params['amount']} {params['fromToken']} to {params['toChain']}"
+            else:
+                response_text = "Please specify the amount, token, and destination chain. For example: 'Bridge 0.1 ETH to Polygon'"
+        else:
+            response_text = f"I understand you said: {message}"
+
         response = {
-            'response': f"I understand you said: {message}",
-            'intent': detect_intent(message),
-            'parameters': extract_parameters(message)
+            'response': response_text,
+            'intent': intent,
+            'parameters': params
         }
 
         print("Sending response:", response)
@@ -96,11 +105,44 @@ def detect_intent(message):
     return 'unknown'
 
 def extract_parameters(message):
-    return {
+    """
+    Extract swap/bridge parameters from the message.
+    Example inputs:
+    - "Swap 100 USDC to ETH"
+    - "Bridge 0.1 ETH to Polygon"
+    """
+    words = message.lower().split()
+    params = {
         'amount': None,
         'fromToken': None,
-        'toToken': None
+        'toToken': None,
+        'toChain': None  # for bridge operations
     }
+    
+    try:
+        # Find amount and tokens
+        for i, word in enumerate(words):
+            # Look for numbers (including decimals)
+            if word.replace('.', '').isdigit():
+                params['amount'] = float(word)
+                # Next word is usually the token
+                if i + 1 < len(words):
+                    params['fromToken'] = words[i + 1].upper()
+            
+            # Look for "to" and get the next word
+            if word == 'to' and i + 1 < len(words):
+                next_word = words[i + 1].upper()
+                # Check if it's a chain or a token
+                if next_word in ['POLYGON', 'ETHEREUM', 'ARBITRUM', 'OPTIMISM', 'BASE']:
+                    params['toChain'] = next_word
+                else:
+                    params['toToken'] = next_word
+
+    except Exception as e:
+        print(f"Error extracting parameters: {str(e)}")
+        
+    return params
+
 
 @app.route('/health', methods=['GET'])
 def health_check():
