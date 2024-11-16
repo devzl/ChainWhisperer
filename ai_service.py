@@ -110,33 +110,47 @@ def extract_parameters(message):
     Example inputs:
     - "Swap 100 USDC to ETH"
     - "Bridge 0.1 ETH to Polygon"
+    - "Swap 100 USDC to ETH from Ethereum to Gnosis"
     """
     words = message.lower().split()
     params = {
         'amount': None,
         'fromToken': None,
         'toToken': None,
-        'toChain': None  # for bridge operations
+        'fromChain': None,  # for specifying source chain
+        'toChain': None     # for specifying destination chain
     }
-    
+
     try:
-        # Find amount and tokens
+        # Find amount and fromToken
         for i, word in enumerate(words):
             # Look for numbers (including decimals)
-            if word.replace('.', '').isdigit():
+            if word.replace('.', '', 1).isdigit():
                 params['amount'] = float(word)
-                # Next word is usually the token
+                # Next word is usually the fromToken
                 if i + 1 < len(words):
                     params['fromToken'] = words[i + 1].upper()
-            
+
             # Look for "to" and get the next word
             if word == 'to' and i + 1 < len(words):
                 next_word = words[i + 1].upper()
                 # Check if it's a chain or a token
-                if next_word in ['POLYGON', 'ETHEREUM', 'ARBITRUM', 'OPTIMISM', 'BASE']:
+                if next_word in ['POLYGON', 'ETHEREUM', 'ARBITRUM', 'OPTIMISM', 'BASE', 'GNOSIS']:
                     params['toChain'] = next_word
                 else:
                     params['toToken'] = next_word
+
+            # Look for "from" and get the next word
+            if word == 'from' and i + 1 < len(words):
+                next_word = words[i + 1].upper()
+                if next_word in ['POLYGON', 'ETHEREUM', 'ARBITRUM', 'OPTIMISM', 'BASE', 'GNOSIS']:
+                    params['fromChain'] = next_word
+
+            # Look for "on" and get the next word
+            if word == 'on' and i + 1 < len(words):
+                next_word = words[i + 1].upper()
+                if next_word in ['POLYGON', 'ETHEREUM', 'ARBITRUM', 'OPTIMISM', 'BASE', 'GNOSIS']:
+                    params['toChain'] = next_word
 
     except Exception as e:
         print(f"Error extracting parameters: {str(e)}")

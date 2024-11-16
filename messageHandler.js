@@ -5,6 +5,9 @@ const { createNexusClient } = require("@biconomy/sdk");
 const { baseSepolia } = require("viem/chains");
 const { http } = require("viem");
 const crypto = require('crypto');
+const { SDK, NetworkEnum, getRandomBytes32, HashLock, PrivateKeyProviderConnector } = require("@1inch/cross-chain-sdk");
+const Web3 = require('web3');
+const { ethers } = require('ethers');
 
 // Store wallet connections (should go in a secure db)
 const walletConnections = new Map();
@@ -14,6 +17,19 @@ const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMess
 
 const INCH_API_KEY = process.env.INCH_API_KEY;
 const INCH_API_URL = 'https://api.1inch.dev/swap/v5.2';
+
+const sdk = new SDK({
+    url: "https://api.1inch.dev/fusion-plus",
+    authKey: INCH_API_KEY, // Ensure you have Fusion+ access
+    blockchainProvider: new Web3('https://mainnet.infura.io/v3/' + process.env.INFURA_KEY)
+  });
+
+  
+
+const toChecksumAddress = (address) => {
+    return ethers.utils.getAddress(address);
+};
+
 // const LZ_API_KEY = process.env.LAYERZERO_API_KEY;
 
 // const AI_SERVICE_URL = 'http://localhost:5000/analyze';
@@ -23,16 +39,84 @@ function generatePrivateKey() {
    return crypto.randomBytes(32).toString('hex');
 }
 
-// Token address mapping
+
+
 const TOKEN_ADDRESSES = {
-    // Mainnet addresses
-    'ETH': '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // Special ETH address for 1inch
-    'USDC': '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on Ethereum
-    'USDT': '0xdAC17F958D2ee523a2206206994597C13D831ec7', // USDT on Ethereum
-    'WETH': '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // WETH on Ethereum
-    'DAI': '0x6B175474E89094C44Da98b954EedeAC495271d0F',  // DAI on Ethereum
+    'ETH': {
+        1: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // ETH on Ethereum (special address in 1inch API)
+        137: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', // WETH on Polygon
+        42161: '0x82AF49447D8a07e3bd95BD0d56f35241523FBab1', // WETH on Arbitrum
+        10: '0x4200000000000000000000000000000000000006', // WETH on Optimism
+        8453: '0x4200000000000000000000000000000000000006', // WETH on Base (same as Optimism)
+    },
+    'WETH': {
+        1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // WETH on Ethereum
+        137: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', // WETH on Polygon
+        42161: '0x82AF49447D8a07e3bd95BD0d56f35241523FBab1', // WETH on Arbitrum
+        10: '0x4200000000000000000000000000000000000006', // WETH on Optimism
+        8453: '0x4200000000000000000000000000000000000006', // WETH on Base
+    },
+    'USDC': {
+        1: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', // USDC on Ethereum
+        137: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // USDC on Polygon
+        42161: '0xFF970A61A04b1Ca14834A43f5DE4533eBdDB5CC8', // USDC on Arbitrum
+        10: '0x7F5c764cBc14f9669B88837ca1490cCa17c31607', // USDC on Optimism
+        8453: '0xd9ec4c6af9E2DAf0F6DC60Caa61dAEa23533Fb04', // USDC on Base
+    },
+    'USDT': {
+        1: '0xdAC17F958D2ee523a2206206994597C13D831ec7', // USDT on Ethereum
+        137: '0x3e121107F6F22DA4911079845a470757aF4e1A1b', // USDT on Polygon
+        42161: '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9', // USDT on Arbitrum
+        10: '0x6c3Ea9036406852006290770f83e38133d39c3b8', // USDT on Optimism
+        8453: '0x6C3ea9036406852006290770f83e38133D39c3b8', // USDT on Base
+    },
+    'DAI': {
+        1: '0x6B175474E89094C44Da98b954EedeAC495271d0F', // DAI on Ethereum
+        137: '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063', // DAI on Polygon (Note: This is a wrapped DAI)
+        42161: '0xDA10009cBd5D07Dd0CeCc66161FC93D7c9000da1', // DAI on Arbitrum
+        10: '0xDA10009cBd5D07Dd0CeCc66161FC93D7c9000da1', // DAI on Optimism
+        8453: '0xF8174eFb89eA8EbdD6D1bE1E9eF1646692445eF0', // DAI on Base
+    },
+    'WBTC': {
+        1: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', // WBTC on Ethereum
+        137: '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6', // WBTC on Polygon
+        42161: '0x2f2a2543B76a4166549F7Aaab0cF3eFba4fc85d2', // WBTC on Arbitrum
+        10: '0x68f180fcce6836688e9084f035309e29bf0a2095', // WBTC on Optimism
+        8453: '0x', // WBTC on Base (verify if available)
+    },
+    'MATIC': {
+        137: '0x0000000000000000000000000000000000001010', // MATIC on Polygon (special address)
+    },
+    'LINK': {
+        1: '0x514910771AF9Ca656af840dff83E8264EcF986CA', // LINK on Ethereum
+        137: '0x53E0bca35ec356bd5dddfebbd1fc0fd03fabad39', // LINK on Polygon
+        42161: '0xf97f4df75117a78c1A5a0DBb814Af92458539FB4', // LINK on Arbitrum
+        10: '0x350a791bfc2c21f9ed5d10980dad2e2638ffa7f6', // LINK on Optimism
+        8453: '0x', // LINK on Base (verify if available)
+    },
+    'UNI': {
+        1: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', // UNI on Ethereum
+        137: '0xb33EaAd8d922B1083446DC23f610c2567fB5180f', // UNI on Polygon
+        42161: '0xfa7f8980b0f1e64a2062791cc3b0871572f1f7f0', // UNI on Arbitrum
+        10: '0x6fd9d7AD17242c41f7131d257212c54A0e816691', // UNI on Optimism
+        8453: '0x', // UNI on Base (verify if available)
+    },
     // Add more tokens as needed
 };
+
+const TOKEN_DECIMALS = {
+    'ETH': 18,
+    'WETH': 18,
+    'USDC': 6,
+    'USDT': 6,
+    'DAI': 18,
+    'WBTC': 8,
+    'MATIC': 18,
+    'LINK': 18,
+    'UNI': 18,
+    // Add other tokens as needed
+};
+
 
 // Chain ID mapping
 const CHAIN_IDS = {
@@ -120,40 +204,48 @@ async function analyzeWithAI(message, chatId) {
 
 async function handleSwapConfirmation(wallet, chatId) {
     try {
-        const quote = wallet.pendingQuote;
+        const { quote, params, humanReadableToAmount } = wallet.pendingQuote;
         if (!quote) {
             return "No pending swap to confirm.";
         }
 
-        // Execute the swap using 1inch
-        const swapResponse = await axios.post(`${INCH_API_URL}/1/swap`, {
-            fromTokenAddress: quote.fromToken,
-            toTokenAddress: quote.toToken,
-            amount: quote.fromTokenAmount,
-            fromAddress: wallet.smartAccountAddress,
-            slippage: 1 // 1% slippage tolerance
-        }, {
-            headers: { 'Authorization': `Bearer ${INCH_API_KEY}` }
+        // Generate secrets for hash lock
+        const secretsCount = quote.preset.secretsCount;
+        const secrets = Array.from({ length: secretsCount }).map(() => getRandomBytes32());
+        const secretHashes = secrets.map((x) => HashLock.hashSecret(x));
+
+        const hashLock =
+            secretsCount === 1
+                ? HashLock.forSingleFill(secrets[0])
+                : HashLock.forMultipleFills(
+                      secretHashes.map((secretHash, i) =>
+                          solidityPackedKeccak256(["uint64", "bytes32"], [i, secretHash.toString()])
+                      )
+                  );
+
+        // Place order using SDK
+        const order = await sdk.placeOrder(quote, {
+            walletAddress: wallet.smartAccountAddress,
+            hashLock,
+            secretHashes,
+            // fee: {
+            //     takingFeeBps: 100, // Example: 1% fee
+            //     takingFeeReceiver: "0x0000000000000000000000000000000000000000"
+            // }
         });
 
-        // Execute the transaction using the wallet
-        const tx = await wallet.nexusClient.sendTransaction({
-            to: swapResponse.data.tx.to,
-            data: swapResponse.data.tx.data,
-            value: swapResponse.data.tx.value
-        });
-
-        // Clear the pending quote
+        // Clear pending quote
         wallet.pendingQuote = null;
 
-        return `✅ Swap executed!\n` +
-               `Transaction hash: ${tx.hash}\n` +
-               `Expected to receive: ${quote.toTokenAmount} ${quote.toToken}`;
+        return `✅ Fusion+ Swap executed!\n` +
+               `Order ID: ${order.orderHash}\n` +
+               `Expected to receive: ${humanReadableToAmount.toFixed(6)} ${params.toToken} on ${params.toChain}`;
     } catch (error) {
-        console.error('Error executing swap:', error);
-        return "❌ Failed to execute swap. Please try again.";
+        console.error('Error executing Fusion+ swap:', error);
+        return "❌ Failed to execute Fusion+ swap. Please try again.";
     }
 }
+
 
 async function handleBridgeConfirmation(wallet, chatId) {
     try {
@@ -195,24 +287,36 @@ async function handleBridgeConfirmation(wallet, chatId) {
 }
 
 
-async function get1inchFusionQuote(fromChainId, toChainId, fromToken, toToken, amount) {
+async function get1inchFusionQuote(fromChainId, toChainId, fromTokenAddress, toTokenAddress, amount) {
     try {
+        const decimals = 18; // Adjust based on token decimals
+        const amountInWei = BigInt(Math.floor(amount * (10 ** decimals))).toString();
+
         const response = await axios.get(`${INCH_API_URL}/fusion-plus/quote`, {
-            headers: { 'Authorization': `Bearer ${INCH_API_KEY}` },
+            headers: { 
+                'Authorization': `Bearer ${INCH_API_KEY}`,
+                'accept': 'application/json'
+            },
             params: {
                 fromChainId,
                 toChainId,
-                fromTokenAddress: fromToken,
-                toTokenAddress: toToken,
-                amount
+                fromTokenAddress,
+                toTokenAddress,
+                amount: amountInWei
             }
         });
+
+        if (!response.data || !response.data.toAmount) {
+            throw new Error('Invalid response from Fusion+ API');
+        }
+
         return response.data;
     } catch (error) {
-        console.error('Error getting Fusion+ quote:', error);
+        console.error('Error getting Fusion+ quote:', error.response?.data || error);
         throw error;
     }
 }
+
 
 // LayerZero Integration
 async function sendCrossChainMessage(fromChainId, toChainId, message, wallet) {
@@ -240,70 +344,86 @@ async function handleSwapIntent(aiResponse, chatId) {
 
     try {
         const params = aiResponse.parameters;
-        if (!params.amount || !params.fromToken || !params.toToken) {
-            return "Please specify the amount and tokens. For example: 'Swap 100 USDC to ETH'";
+
+        // Ensure all required parameters are provided
+        if (!params.amount || !params.fromToken || !params.toToken || !params.fromChain || !params.toChain) {
+            return "Please specify the amount, tokens, and both source and target chains. For example: 'Swap 100 USDC to ETH from Ethereum to Gnosis'";
         }
 
-        // Check if tokens are supported
-        if (!TOKEN_ADDRESSES[params.fromToken] || !TOKEN_ADDRESSES[params.toToken]) {
-            return `Unsupported token. Supported tokens: ${Object.keys(TOKEN_ADDRESSES).join(', ')}`;
+        // Resolve chain IDs
+        const srcChainId = getChainId(params.fromChain);
+        const dstChainId = getChainId(params.toChain);
+
+        // Check if source and destination chains are the same
+        if (srcChainId === dstChainId) {
+            console.log('dstChainId: ', dstChainId);
+            console.log('srcChainId: ', srcChainId);
+            return `❌ Source chain (${params.fromChain}) and destination chain (${params.toChain}) cannot be the same for a cross-chain swap.`;
         }
 
-        // Get quote from 1inch
-        const quote = await get1inchQuote(
-            params.fromToken,
-            params.toToken,
-            params.amount,
-            1 // Default to Ethereum mainnet
-        );
+        // Resolve token addresses
+        const srcTokenAddress = TOKEN_ADDRESSES[params.fromToken.toUpperCase()]?.[srcChainId];
+        const dstTokenAddress = TOKEN_ADDRESSES[params.toToken.toUpperCase()]?.[dstChainId];
 
-        console.log('Processing quote:', quote);  // Debug log
-
-        if (!quote || !quote.toAmount) {  // Changed from toTokenAmount to toAmount
-            throw new Error('Invalid quote received from 1inch');
+        // Validate token addresses
+        if (!srcTokenAddress || !dstTokenAddress) {
+            return `Unsupported token or chain. Please check the token (${params.fromToken}, ${params.toToken}) and chain (${params.fromChain}, ${params.toChain}).`;
         }
 
-        // Store quote for later confirmation
-        wallet.pendingQuote = {
-            ...quote,
-            fromToken: params.fromToken,
-            toToken: params.toToken,
-            fromTokenAddress: TOKEN_ADDRESSES[params.fromToken],
-            toTokenAddress: TOKEN_ADDRESSES[params.toToken],
-            fromAmount: params.amount
-        };
+        // Convert amount to proper decimals
+        const decimals = TOKEN_DECIMALS[params.fromToken.toUpperCase()];
 
-        // Convert amounts to human-readable format
-        // const fromDecimals = params.fromToken === 'USDC' ? 6 : 18;
-        const toDecimals = params.toToken === 'USDC' ? 6 : 18;
-        
-        // Parse the toAmount as a BigInt and convert to number
-        const toAmountBig = BigInt(quote.toAmount);  // Changed from toTokenAmount to toAmount
-        const humanReadableToAmount = Number(toAmountBig) / (10 ** toDecimals);
-        
-        // Calculate rate
-        const rate = humanReadableToAmount / params.amount;
-
-        console.log('Quote calculation:', {  // Debug log
-            toAmount: quote.toAmount,
-            humanReadableToAmount,
-            rate
+        console.log("Debug Parameters:", {
+            srcChainId,
+            dstChainId,
+            srcTokenAddress,
+            dstTokenAddress,
+            decimals,
+            amount : params.amount
         });
 
-        return `💱 Quote received!\n` +
-               `Amount: ${params.amount} ${params.fromToken}\n` +
-               `You'll receive: ${humanReadableToAmount.toFixed(6)} ${params.toToken}\n` +
-               `Rate: 1 ${params.fromToken} = ${rate.toFixed(6)} ${params.toToken}\n` +
-               `Network: Ethereum\n\n` +
-               `Reply with 'confirm' to execute the swap`;
+        const amountInWei = BigInt(Math.floor(params.amount * (10 ** decimals))).toString();
+
+
+        
+
+        
+        // Prepare quote parameters
+        const quoteParams = {
+            srcChainId,
+            dstChainId,
+            srcTokenAddress,
+            dstTokenAddress,
+            amount: amountInWei,
+        };
+
+        // Get cross-chain quote using SDK
+        const quote = await sdk.getQuote(quoteParams);
+        console.log('quote: ', quote);
+
+        // Convert received amount to human-readable format
+        const toDecimals = TOKEN_DECIMALS[params.toToken.toUpperCase()];
+        const humanReadableToAmount = Number(BigInt(quote.dstTokenAmount) / BigInt(10 ** toDecimals));
+
+        // Store the quote for confirmation
+        wallet.pendingQuote = {
+            quote,
+            params,
+            humanReadableToAmount,
+        };
+
+        return `💱 Cross-Chain Swap Quote received!\n` +
+               `Amount: ${params.amount} ${params.fromToken} on ${params.fromChain}\n` +
+               `You'll receive: ${humanReadableToAmount.toFixed(6)} ${params.toToken} on ${params.toChain}\n\n` +
+               `Reply with 'confirm' to execute the cross-chain swap.`;
     } catch (error) {
-        console.error('Error in swap intent:', error);
-        if (error.response?.data?.description) {
-            return `❌ Error: ${error.response.data.description}`;
-        }
-        return `❌ Sorry, I couldn't get a quote: ${error.message}`;
+        console.error('Error in cross-chain swap intent:', error);
+        return `❌ Sorry, I couldn't get a cross-chain quote: ${error.message}`;
     }
 }
+
+
+
 
 // Updated quote function with proper response handling
 async function get1inchQuote(fromToken, toToken, amount, chainId = 1) {
@@ -392,14 +512,26 @@ async function handleBridgeIntent(aiResponse, chatId) {
 // Helper function for chain IDs
 function getChainId(chainName) {
     const chainIds = {
-        'ethereum': 1,
-        'polygon': 137,
-        'arbitrum': 42161,
-        'optimism': 10,
-        'base': 8453
+        'ethereum': NetworkEnum.ETHEREUM,
+        'polygon': NetworkEnum.POLYGON,
+        'arbitrum': NetworkEnum.ARBITRUM,
+        'optimism': NetworkEnum.OPTIMISM,
+        'base': 8453 // Update if necessary
     };
-    return chainIds[chainName.toLowerCase()] || 1;
+    return chainIds[chainName.toLowerCase()] || NetworkEnum.ETHEREUM;
 }
+
+function getChainName(chainId) {
+    const chainNames = {
+        [NetworkEnum.ETHEREUM]: 'Ethereum',
+        [NetworkEnum.POLYGON]: 'Polygon',
+        [NetworkEnum.ARBITRUM]: 'Arbitrum',
+        [NetworkEnum.OPTIMISM]: 'Optimism',
+        8453: 'Base' // Update if necessary
+    };
+    return chainNames[chainId] || 'Unknown';
+}
+
 
 async function handleBalanceIntent(chatId) {
    const wallet = walletConnections.get(chatId);
