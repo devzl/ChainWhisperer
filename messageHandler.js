@@ -2,7 +2,7 @@ const axios = require('axios');
 require('dotenv').config();
 const { privateKeyToAccount } = require("viem/accounts");
 const { createNexusClient } = require("@biconomy/sdk");
-const { polygon } = require("viem/chains");
+const { polygonMumbai, baseSepolia } = require("viem/chains");
 const { http } = require("viem");
 const crypto = require('crypto');
 const { SDK, NetworkEnum, getRandomBytes32, HashLock, PrivateKeyProviderConnector } = require("@1inch/cross-chain-sdk");
@@ -132,7 +132,7 @@ async function handleSendIntent(aiResponse, chatId) {
     const params = aiResponse.parameters;
 
     if (!params.amount || !params.fromToken || !params.toAddress || !params.toChain) {
-        return "Please specify the amount, token, recipient address, and network. Example: 'Send 1.5 USDC to 0x123... on Polygon'.";
+        return "Please specify the amount, token, recipient address, and network. Example: 'Send 1.5 USDC to 0x123... on Polygon Mumbai'.";
     }
 
     // Resolve chain ID
@@ -167,7 +167,7 @@ async function handleSendIntent(aiResponse, chatId) {
 
 // Fetch token balances from Blockscout
 async function fetchTokenBalances(walletAddress) {
-    const url = `https://matic.blockscout.com/api/v2/addresses/${walletAddress}/token-balances`;
+    const url = `https://eth.blockscout.com/api/v2/addresses/${walletAddress}/token-balances`;
 
     try {
         const response = await axios.get(url);
@@ -184,7 +184,7 @@ async function fetchTokenBalances(walletAddress) {
 }
 
 // Done with BlockScout
-async function handleTokenBalancesIntent(chatId, chainName = 'polygon') {
+async function handleTokenBalancesIntent(chatId, chainName = 'ethereum') {
     const wallet = await getWallet(chatId);
     if (!wallet) {
         return "Please create a wallet first using /start.";
@@ -342,7 +342,7 @@ async function createSmartAccount(chatId) {
 
         const nexusClient = await createNexusClient({
             signer: account,
-            chain: polygon,
+            chain: baseSepolia,
             transport: http(),
             bundlerTransport: http(bundlerUrl),
         });
@@ -356,7 +356,7 @@ async function createSmartAccount(chatId) {
              ON CONFLICT (chat_id) 
              DO UPDATE SET smart_account_address = $2, private_key = $3, chain_id = $4
              RETURNING *`,
-            [chatId, smartAccountAddress, privateKey, polygon.id]
+            [chatId, smartAccountAddress, privateKey, baseSepolia.id]
         );
 
         console.log('Wallet saved to database:', result.rows[0]);
@@ -602,7 +602,7 @@ async function handleSwapIntent(aiResponse, chatId) {
                `Amount: ${params.amount} ${params.fromToken} on ${params.fromChain}\n` +
                `You'll receive: ${humanReadableToAmount.toFixed(6)} ${params.toToken} on ${params.toChain}\n\n` +
                `Reply with 'confirm' to execute the cross-chain swap.`;
-    } catch (error) {
+    } catch (error) {        
         console.error('Error in swap intent:', error);
         return `❌ Unable to get a cross-chain quote: ${error.message}`;
     }

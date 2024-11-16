@@ -90,7 +90,7 @@ def detect_intent(message):
         return 'bridge'
 
     # Detect other intents
-    if any(phrase in message for phrase in ['my token balances', 'which tokens', 'show tokens', 'token balance']):
+    if any(phrase in message for phrase in ['tokens balances', 'my token balances', 'which tokens', 'show tokens', 'token balance']):
         return 'token_balances'
     elif any(word in message for word in ['swap', 'exchange', 'trade']):
         return 'swap'

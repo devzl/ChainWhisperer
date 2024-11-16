@@ -10,31 +10,31 @@ const pool = new Pool({
 
 
 
-// const resetWalletsTable = async () => {
-//     const dropAndCreateQuery = `
-//         DROP TABLE IF EXISTS wallets;
+const resetWalletsTable = async () => {
+    const dropAndCreateQuery = `
+        DROP TABLE IF EXISTS wallets;
 
-//         CREATE TABLE wallets (
-//             chat_id BIGINT PRIMARY KEY,
-//             smart_account_address TEXT NOT NULL,
-//             private_key TEXT NOT NULL,
-//             chain_id INT NOT NULL
-//         );
-//     `;
+        CREATE TABLE wallets (
+            chat_id BIGINT PRIMARY KEY,
+            smart_account_address TEXT NOT NULL,
+            private_key TEXT NOT NULL,
+            chain_id INT NOT NULL
+        );
+    `;
 
-//     try {
-//         await pool.query(dropAndCreateQuery);
-//         console.log('Table `wallets` has been dropped and recreated successfully.');
-//     } catch (error) {
-//         console.error('Error resetting the `wallets` table:', error);
-//         throw error;
-//     }
-// };
+    try {
+        await pool.query(dropAndCreateQuery);
+        console.log('Table `wallets` has been dropped and recreated successfully.');
+    } catch (error) {
+        console.error('Error resetting the `wallets` table:', error);
+        throw error;
+    }
+};
 
-// // Call the reset function immediately
-// resetWalletsTable()
-//     .then(() => console.log('Table reset completed successfully.'))
-//     .catch((err) => console.error('Error resetting table:', err));
+// Call the reset function immediately
+resetWalletsTable()
+    .then(() => console.log('Table reset completed successfully.'))
+    .catch((err) => console.error('Error resetting table:', err));
 
 
 module.exports = {
