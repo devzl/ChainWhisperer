@@ -1,0 +1,61 @@
+# Node.js dependencies
+node_modules/
+# Include this to ensure `node_modules` is excluded, as it is recreated with `npm install`.
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+# Excludes environment files that often contain sensitive credentials.
+
+# Build outputs
+dist/
+build/
+coverage/
+# For projects using build systems, exclude output folders.
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+# Excludes macOS and Windows specific files.
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*.s#
+*.un~
+*.tmproj
+*.sublime-project
+*.sublime-workspace
+# Ensures editor and IDE configuration files do not clutter your repository.
+
+# Debugging files
+*.stackdump
+*.pid
+
+# Test coverage
+coverage/
+.nyc_output/
+# Excludes code coverage reports.
+
+# Temporary files
+*.tmp
+*.temp
+
+# Optional npm cache directory
+.npm
+
+# Miscellaneous
+*.log
+*.out
+*.lock
